@@ -1,0 +1,10 @@
+# 실행 중 생기는 것 — 저장소에 들어갈 일이 없다
+*.log
+found*.json
+purchased.marker
+__pycache__/
+*.pyc
+
+# 자격증명은 ~/.config/ktx-seat-watch/ 에 둔다. 혹시라도 여기 생기면 막는다
+secrets.env
+.env
