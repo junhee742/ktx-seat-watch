@@ -3,7 +3,7 @@
 매진된 KTX 열차의 취소표를 주기적으로 감시해, 자리가 나오면 **즉시 예약하고 알린다.**
 결제는 하지 않는다 — 코레일 구입기한 10분 안에 본인이 코레일톡에서 결제해야 한다.
 
-사람이 새로고침을 반복하는 대신 launchd 가 5분마다 조회한다. 터미널을 닫아도,
+사람이 새로고침을 반복하는 대신 OS 스케줄러가 5분마다 조회한다. 터미널을 닫아도,
 Claude 세션을 끝내도 계속 돈다.
 
 Claude Code 스킬로 쓰는 것을 전제로 만들었지만, `scripts/` 안의 스크립트는
@@ -16,16 +16,20 @@ Claude 없이 직접 실행해도 된다.
 - **공개되지 않은 내부 API 를 쓴다.** 코레일이 바꾸면 예고 없이 멈춘다.
 - **본인 승차 목적으로만 쓸 것.** 매크로 예매는 국내에서 암표로 규제되며 입건 사례가 있다.
   조회 주기를 기본값(300초)보다 줄이지 말 것. 5분이면 취소표를 잡기에 충분하다.
-- **macOS 전용.** launchd, `osascript`, `say` 에 의존한다. Linux 는 지원하지 않는다.
+- **macOS 와 Linux 에서 돈다.** Windows 는 지원하지 않는다.
+  주기 실행은 macOS 면 launchd, Linux 면 systemd user timer 를 쓴다. 설치 스크립트가 알아서 가른다.
+- **Linux 에서는 텔레그램을 반드시 설정할 것.** macOS 의 `osascript` 알림·음성이 없어
+  `notify-send` 하나만 남는데, 서버나 헤드리스 환경에는 그마저 없다. 자리를 잡아도 모르고 지나간다.
 
 ## 필요한 것
 
 | | |
 |---|---|
-| macOS | launchd 로 주기 실행 |
+| macOS 10.x+ | launchd 로 주기 실행 |
+| 또는 Linux + systemd 240+ | systemd user timer 로 주기 실행 |
 | python3 + `korail2` + `pycryptodome` | `pip install korail2 pycryptodome` |
 | 코레일 계정 | 본인 계정 |
-| 텔레그램 봇 | 선택. 없으면 데스크톱 알림만 뜬다 |
+| 텔레그램 봇 | macOS 는 선택, **Linux 는 사실상 필수** |
 
 코레일과 실제로 통신하는 층은 직접 구현하지 않았다. `vendor/ktx_booking.py` 가 하고,
 그 아래 [korail2](https://github.com/carpedm20/korail2)(BSD) 가 있다.
@@ -89,9 +93,17 @@ tail -f ~/.local/state/ktx-seat-watch/<날짜>-<열차>/watch.log
 
 ## 자리가 잡히면
 
-텔레그램, 데스크톱 알림 3회, 음성 안내, 그리고 닫을 때까지 남는 모달이 뜬다.
 **10분 안에 코레일톡에서 결제하지 않으면 예약이 자동 취소된다.** 알림을 여러 경로로
 거는 이유가 이것이다.
+
+| | macOS | Linux |
+|---|---|---|
+| 텔레그램 | ✅ | ✅ (사실상 유일한 통로) |
+| 데스크톱 알림 | `osascript` 3회 | `notify-send -u critical` 1회 (직접 닫을 때까지 남는다) |
+| 음성 안내 | `say -v Yuna` | 없음 |
+| 모달 | 닫을 때까지 남는다 | 없음 |
+
+데스크톱 알림은 전부 best-effort 다 — 없는 환경이면 조용히 넘어간다. 확실한 통로는 텔레그램뿐이다.
 
 ## 중복 예약을 만들지 않는 법
 
@@ -112,9 +124,22 @@ tail -f ~/.local/state/ktx-seat-watch/<날짜>-<열차>/watch.log
 ## 알아둘 것
 
 - 맥이 잠들면 그동안 멈춘다. 밤새 감시하려면 `pmset` 설정을 확인할 것
-- 재부팅하면 로그인해야 다시 뜬다
+- 재부팅하면 로그인해야 다시 뜬다. Linux 에서 로그아웃 후에도 돌리려면
+  `sudo loginctl enable-linger $(id -un)` — 설치 스크립트가 시도하고, 권한이 없으면 이 명령을 안내한다
 - 상태와 로그는 `~/.local/state/ktx-seat-watch/<날짜>-<열차>/` 에 쌓인다
 - CAPTCHA 나 본인인증이 뜨면 우회하지 않고 멈춘다
+
+## 검증 범위
+
+| 대상 | macOS | Linux |
+|---|---|---|
+| 등록 → 주기 발화 → 해제 | ✅ 실기 | ✅ systemd 컨테이너 |
+| unit/plist 생성 내용 | ✅ | ✅ `systemd-analyze verify` |
+| 감시 스크립트 로직 | ✅ | ✅ |
+| `notify-send` 실제 표시 | — | ❌ 미검증 (데스크톱 환경 없음) |
+| lingering 후 로그아웃 유지 | — | ❌ 미검증 |
+
+Linux 검증은 Ubuntu 24.04 + systemd 255 컨테이너에서 했다. 배포판별 차이는 확인하지 않았다.
 
 ## 라이선스
 

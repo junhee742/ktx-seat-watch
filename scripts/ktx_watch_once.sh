@@ -1,6 +1,8 @@
 #!/bin/bash
-# launchd 가 주기적으로 호출한다. 1회만 조회하고 끝낸다.
-# 설정은 전부 환경변수로 받는다(plist 의 EnvironmentVariables). 한 스크립트로 여러 감시를 돌리기 위함이다.
+# 스케줄러(macOS launchd / Linux systemd user timer)가 주기적으로 호출한다.
+# 1회만 조회하고 끝낸다.
+# 설정은 전부 환경변수로 받는다(plist 의 EnvironmentVariables, unit 의 Environment=).
+# 한 스크립트로 여러 감시를 돌리기 위함이다.
 #
 # 필수: KTX_DEP KTX_ARR KTX_DATE KTX_TRAINS KTX_STATE_DIR
 # 선택: KTX_TIME(0000) KTX_ADULTS(1) KTX_SEAT_OPTION(general-first)
@@ -68,13 +70,14 @@ if [[ -z "$KSKILL_KTX_ID" || -z "$KSKILL_KTX_PASSWORD" ]]; then
   exit 1
 fi
 
-# launchd 의 PATH 는 빈약하다. korail2 를 실제로 import 할 수 있는 파이썬을
+# launchd·systemd 의 PATH 는 빈약하다. korail2 를 실제로 import 할 수 있는 파이썬을
 # 골라야 한다 — 아무 python3 나 잡으면 조용히 실패한다.
 PY=""
 for cand in "${KTX_PYTHON:-}" \
             "$(command -v python3 2>/dev/null)" \
             /opt/homebrew/bin/python3 \
             /Library/Frameworks/Python.framework/Versions/3.11/bin/python3 \
+            "$HOME/.local/bin/python3" \
             /usr/local/bin/python3 \
             /usr/bin/python3; do
   [[ -n "$cand" && -x "$cand" ]] || continue
@@ -154,6 +157,8 @@ except Exception:
   fi
 fi
 
+# KTX_TRAINS 는 "208 206" 처럼 공백으로 여러 열차를 담는다. 여기서는 쪼개지는 것이 의도다.
+# shellcheck disable=SC2206
 watch_args=("$KTX_DEP" "$KTX_ARR" "$KTX_DATE"
             --train-no $KTX_TRAINS --time "$KTX_TIME" --adults "$KTX_ADULTS"
             --seat-option "$KTX_SEAT_OPTION" --once --reserve --emit "$FOUND")
@@ -192,14 +197,30 @@ PYEOF
 
 "$HERE/notify_telegram.sh" "$msg" >> "$LOG" 2>&1 && log "텔레그램 전송 완료"
 
-for _ in 1 2 3; do
-  /usr/bin/osascript -e 'display notification "KTX 좌석 예약 완료 — 10분 안에 코레일톡에서 결제!" with title "KTX 좌석 확보" sound name "Glass"' 2>/dev/null
-  /usr/bin/say -v Yuna "케이티엑스 자리 예약 완료. 십분 안에 결제하세요." 2>/dev/null
-  sleep 3
-done
+# 데스크톱 알림은 전부 best-effort 다. 없는 환경이면 조용히 넘어가고,
+# 확실한 통로는 위의 텔레그램이다 — Linux 에서는 특히 그렇다.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  for _ in 1 2 3; do
+    /usr/bin/osascript -e 'display notification "KTX 좌석 예약 완료 — 10분 안에 코레일톡에서 결제!" with title "KTX 좌석 확보" sound name "Glass"' 2>/dev/null
+    /usr/bin/say -v Yuna "케이티엑스 자리 예약 완료. 십분 안에 결제하세요." 2>/dev/null
+    sleep 3
+  done
 
-/usr/bin/osascript -e 'display dialog "KTX 좌석 예약 완료
+  /usr/bin/osascript -e 'display dialog "KTX 좌석 예약 완료
 
 코레일톡에서 10분 안에 결제하세요.
 결제하지 않으면 예약이 자동 취소됩니다." with title "KTX 좌석 확보" buttons {"확인"} default button 1 with icon caution' 2>/dev/null &
+else
+  # systemd user service 에는 DBUS 주소가 없을 수 있다. 표준 경로로 채워 준다.
+  uid="$(id -u)"
+  if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" && -S "/run/user/${uid}/bus" ]]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${uid}/bus"
+  fi
+  # -u critical 은 대부분의 데스크톱에서 직접 닫을 때까지 남는다. 그래서 반복하지 않는다.
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -u critical "KTX 좌석 확보" \
+      "KTX 좌석 예약 완료 — 10분 안에 코레일톡에서 결제하세요. 결제하지 않으면 자동 취소됩니다." \
+      2>/dev/null || log "notify-send 실패(무시)"
+  fi
+fi
 exit 0
