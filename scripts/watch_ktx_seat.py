@@ -27,24 +27,33 @@ PLUGIN_ROOTS = (
 )
 HELPER_INSTALL_HINT = (
     "코레일 통신을 담당하는 ktx_booking.py 를 찾지 못했다.\n"
-    "k-skill 플러그인을 설치할 것:\n"
-    "  claude 안에서  /plugin marketplace add NomaDamas/k-skill\n"
-    "설치 경로가 특이하면 KTX_HELPER 에 직접 지정할 수 있다."
+    "이 저장소의 vendor/ktx_booking.py 가 있어야 한다 — clone 이 온전한지 확인할 것.\n"
+    "다른 위치의 것을 쓰려면 KTX_HELPER 에 경로를 지정한다."
 )
+
+
+def vendored_helper() -> str:
+    """저장소에 함께 들어 있는 helper. scripts/ 의 한 층 위 vendor/ 에 있다."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(os.path.dirname(here), "vendor", "ktx_booking.py")
 
 
 def resolve_helper() -> str:
     """ktx_booking.py 의 위치를 찾는다.
 
-    k-skill 은 marketplaces 아래에 그대로 풀리기도 하고, cache 아래
-    버전 디렉터리에 들어가기도 한다. 둘 다 뒤진다.
+    순서는 KTX_HELPER → 저장소 vendor/ → 플러그인 설치 경로다.
+    KTX_HELPER 는 plist 에 박혀 있을 수 있고, 그 경로는 플러그인이 업데이트되면
+    사라진다. 그래서 없으면 죽지 않고 다음 후보로 넘어간다.
     """
     override = os.environ.get("KTX_HELPER")
     if override:
         if os.path.isfile(override):
             return override
-        log(f"KTX_HELPER 에 지정된 경로에 파일이 없다: {override}")
-        raise SystemExit(2)
+        log(f"KTX_HELPER 경로에 파일이 없다, 다른 후보를 찾는다: {override}")
+
+    vendored = vendored_helper()
+    if os.path.isfile(vendored):
+        return vendored
 
     for root in PLUGIN_ROOTS:
         base = os.path.expanduser(root)

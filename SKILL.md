@@ -13,20 +13,20 @@ KTX 잔여석을 실시간으로 볼 수 있는 경로는 사실상 하나뿐인
 
 | 경로 | 실시간 잔여석 | 예약 | 비고 |
 |---|---|---|---|
-| k-skill 플러그인의 `scripts/ktx_booking.py` | O | O | **이것만 된다** |
+| `vendor/ktx_booking.py` (이 저장소) | O | O | **이것만 된다** |
 | `npx @nomadamas/k-skill@0 exec ktx-booking` | X | X | 공개 XLSX 시간표 전용 |
 | 코레일 웹사이트 브라우저 자동화 | 조회만 | X | 로그인·예약대기 확인 불가 |
 | `srt-booking` | 설계상 O | X | SRT 전용, endpoint 무응답 상태 |
 
-npx 버전만 보고 "불가능하다"고 판단하기 쉬운데 틀린 결론이다. 반드시 플러그인으로 설치된 helper 를 쓴다.
+npx 버전만 보고 "불가능하다"고 판단하기 쉬운데 틀린 결론이다. 반드시 `vendor/ktx_booking.py` 를 쓴다.
 
 ## 시작 전에 확인할 것
 
-**k-skill 플러그인이 필요하다.** 코레일 통신을 하는 `ktx_booking.py` 가 거기서 온다.
-없으면 `claude` 안에서 `/plugin marketplace add NomaDamas/k-skill` 로 설치한다.
-스크립트가 `~/.claude/plugins/` 아래를 알아서 뒤지고, 특이한 위치라면 `KTX_HELPER` 로 지정할 수 있다.
+코레일 통신을 하는 `ktx_booking.py` 는 **이 저장소의 `vendor/` 에 들어 있다.** 따로 설치할 것이 없다.
+(원래는 k-skill 플러그인에서 왔지만 upstream 에서 삭제됐다. `vendor/README.md` 참고.)
+탐지 순서는 `KTX_HELPER` → `vendor/` → 플러그인 설치 경로다.
 
-`korail2` 와 `pycryptodome` 이 설치된 python3 도 있어야 한다: `pip install korail2 pycryptodome`
+`korail2` 와 `pycryptodome` 이 설치된 python3 은 있어야 한다: `pip install korail2 pycryptodome`
 
 `~/.config/ktx-seat-watch/secrets.env` 에 코레일 자격증명을 넣는다. 텔레그램 두 줄은 선택이다 — 없으면 알림만 건너뛴다.
 
@@ -63,8 +63,7 @@ curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getChat" --data-urlen
 set -a; . ~/.config/ktx-seat-watch/secrets.env; set +a
 export KSKILL_KTX_ID="$KTX_ID" KSKILL_KTX_PASSWORD="$KTX_PASSWORD"
 PY=$(command -v python3)
-H=$(find ~/.claude/plugins/marketplaces ~/.claude/plugins/cache \
-         -name ktx_booking.py -type f 2>/dev/null | head -1)
+H=~/.claude/skills/ktx-seat-watch/vendor/ktx_booking.py
 $PY "$H" search 창원중앙 서울 20260904 000000 --adults 1 --limit 30 \
     --include-no-seats --include-waiting-list
 ```

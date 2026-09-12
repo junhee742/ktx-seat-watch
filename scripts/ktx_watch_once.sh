@@ -88,14 +88,27 @@ if [[ -z "$PY" ]]; then
   exit 1
 fi
 
-# 코레일 통신을 담당하는 helper. k-skill 플러그인이 깔아준다.
-HELPER="${KTX_HELPER:-}"
+# 코레일 통신을 담당하는 helper.
+# 순서는 KTX_HELPER → 저장소 vendor/ → 플러그인 설치 경로.
+# KTX_HELPER 는 plist 에 박혀 있고 플러그인이 업데이트되면 그 경로가 사라진다.
+# 그래서 없으면 죽지 않고 다음 후보로 넘어간다.
+HELPER=""
+if [[ -n "${KTX_HELPER:-}" ]]; then
+  if [[ -f "$KTX_HELPER" ]]; then
+    HELPER="$KTX_HELPER"
+  else
+    log "KTX_HELPER 경로에 파일이 없다, 다른 후보를 찾는다: $KTX_HELPER"
+  fi
+fi
+if [[ -z "$HELPER" && -f "$HERE/../vendor/ktx_booking.py" ]]; then
+  HELPER="$HERE/../vendor/ktx_booking.py"
+fi
 if [[ -z "$HELPER" ]]; then
   HELPER=$(find "$HOME/.claude/plugins/marketplaces" "$HOME/.claude/plugins/cache" \
              -name ktx_booking.py -type f 2>/dev/null | head -1)
 fi
 if [[ ! -f "$HELPER" ]]; then
-  log "ktx_booking.py 를 찾지 못했다. /plugin marketplace add NomaDamas/k-skill"
+  log "ktx_booking.py 를 찾지 못했다. vendor/ktx_booking.py 가 있는지 확인할 것"
   exit 1
 fi
 

@@ -54,14 +54,21 @@ if [[ -z "$PY_BAKED" ]]; then
   exit 1
 fi
 
+# 저장소에 함께 들어 있는 것을 기본으로 쓴다. 플러그인 업데이트에 휘둘리지 않는다.
 HELPER_BAKED="${KTX_HELPER:-}"
+if [[ -n "$HELPER_BAKED" && ! -f "$HELPER_BAKED" ]]; then
+  echo "KTX_HELPER 경로에 파일이 없습니다: $HELPER_BAKED" >&2
+  HELPER_BAKED=""
+fi
+if [[ -z "$HELPER_BAKED" && -f "$HERE/../vendor/ktx_booking.py" ]]; then
+  HELPER_BAKED="$(cd "$HERE/../vendor" && pwd)/ktx_booking.py"
+fi
 if [[ -z "$HELPER_BAKED" ]]; then
   HELPER_BAKED=$(find "$HOME/.claude/plugins/marketplaces" "$HOME/.claude/plugins/cache" \
                    -name ktx_booking.py -type f 2>/dev/null | head -1)
 fi
 if [[ ! -f "$HELPER_BAKED" ]]; then
-  echo "ktx_booking.py 를 찾지 못했습니다. k-skill 플러그인이 필요합니다:" >&2
-  echo "  claude 안에서  /plugin marketplace add NomaDamas/k-skill" >&2
+  echo "ktx_booking.py 를 찾지 못했습니다. vendor/ktx_booking.py 가 있는지 확인하세요." >&2
   exit 1
 fi
 
@@ -113,6 +120,7 @@ echo "  열차   : $TRAINS (앞엣것 우선)"
 echo "  좌석   : $SEAT_OPTION, 예약대기 $([[ "$TRY_WAITING" == "1" ]] && echo 허용 || echo 제외), ${ADULTS}명"
 echo "  주기   : ${INTERVAL}초${DEADLINE:+, 마감 $DEADLINE}"
 echo "  파이썬 : $PY_BAKED"
+echo "  helper : $HELPER_BAKED"
 echo "  상태   : $STATE_DIR"
 echo "  로그   : $STATE_DIR/watch.log"
 echo

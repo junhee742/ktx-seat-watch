@@ -24,25 +24,23 @@ Claude 없이 직접 실행해도 된다.
 |---|---|
 | macOS | launchd 로 주기 실행 |
 | python3 + `korail2` + `pycryptodome` | `pip install korail2 pycryptodome` |
-| k-skill 플러그인 | 코레일 통신을 하는 `ktx_booking.py` 를 제공한다 |
 | 코레일 계정 | 본인 계정 |
 | 텔레그램 봇 | 선택. 없으면 데스크톱 알림만 뜬다 |
 
-코레일 통신은 직접 구현하지 않았다. [NomaDamas/k-skill](https://github.com/NomaDamas/k-skill) 의
-`ktx_booking.py` 가 하고, 그 아래 [korail2](https://github.com/carpedm20/korail2) 가 있다.
-자세한 출처는 [CREDITS.md](CREDITS.md) 를 보라.
+코레일과 실제로 통신하는 층은 직접 구현하지 않았다. `vendor/ktx_booking.py` 가 하고,
+그 아래 [korail2](https://github.com/carpedm20/korail2)(BSD) 가 있다.
+`ktx_booking.py` 는 [NomaDamas/k-skill](https://github.com/NomaDamas/k-skill)(MIT) 에서
+가져왔고 수정하지 않았다 — 커밋·해시까지 [vendor/README.md](vendor/README.md) 에 적어 두었다.
+
+원래는 k-skill 플러그인을 설치해 쓰도록 만들었지만, **그 파일은 upstream 에서 삭제됐다**
+(2026-09-12 확인, `railway-timetable` 로 대체되었고 그쪽은 실시간 잔여석·예약을 하지 않는다).
+그래서 저장소에 함께 넣었다. clone 하면 따로 설치할 것이 없다.
 
 ## 설치
 
 ```bash
 git clone https://github.com/junhee742/ktx-seat-watch.git ~/.claude/skills/ktx-seat-watch
 pip install korail2 pycryptodome
-```
-
-k-skill 플러그인은 `claude` 안에서 설치한다.
-
-```
-/plugin marketplace add NomaDamas/k-skill
 ```
 
 자격증명을 넣는다.
