@@ -6,7 +6,8 @@
 # 사용:
 #   install_watch.sh --dep 창원중앙 --arr 서울 --date 20260904 --trains "208 206" \
 #                    [--time 0900] [--adults 1] [--seat-option general-first] \
-#                    [--no-waiting] [--deadline 202609041020] [--interval 300]
+#                    [--no-waiting] [--deadline 202609041020] [--interval 300] [--name me]
+#   --name : 같은 열차 목록으로 여러 장을 따로 잡을 때 감시를 구분하는 이름
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -14,7 +15,7 @@ OS="$(uname -s)"
 
 DEP=""; ARR=""; DATE=""; TRAINS=""
 TIME="0000"; ADULTS="1"; SEAT_OPTION="general-first"
-TRY_WAITING="1"; DEADLINE=""; INTERVAL="300"
+TRY_WAITING="1"; DEADLINE=""; INTERVAL="300"; NAME=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -28,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     --no-waiting) TRY_WAITING="0"; shift ;;
     --deadline) DEADLINE="$2"; shift 2 ;;
     --interval) INTERVAL="$2"; shift 2 ;;
+    --name) NAME="$2"; shift 2 ;;
     *) echo "알 수 없는 인자: $1" >&2; exit 2 ;;
   esac
 done
@@ -42,8 +44,8 @@ case "$OS" in
   *) echo "지원하지 않는 OS: $OS (macOS 와 Linux 만 됩니다)" >&2; exit 1 ;;
 esac
 
-LABEL="ktx-seat-watch.${DATE}.$(echo "$TRAINS" | tr ' ' '-')"
-STATE_DIR="$HOME/.local/state/ktx-seat-watch/${DATE}-$(echo "$TRAINS" | tr ' ' '-')"
+LABEL="ktx-seat-watch.${DATE}.${NAME:+$NAME.}$(echo "$TRAINS" | tr ' ' '-')"
+STATE_DIR="$HOME/.local/state/ktx-seat-watch/${DATE}-${NAME:+$NAME-}$(echo "$TRAINS" | tr ' ' '-')"
 mkdir -p "$STATE_DIR"
 
 # 스케줄러는 PATH 가 빈약해서 python3 를 못 찾거나 korail2 없는 것을 잡을 수 있다.

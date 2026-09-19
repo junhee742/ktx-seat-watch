@@ -104,28 +104,41 @@ def openings(train: dict) -> list[str]:
 
 
 def check_once(a: argparse.Namespace) -> dict | None:
-    search_args = [
-        "search", a.dep, a.arr, a.date, a.time + "00",
-        "--adults", str(a.adults),
-        "--limit", str(a.limit),
-        "--include-no-seats",
-        "--include-waiting-list",
-    ]
-    result, err = run_helper(search_args)
-    if result is None:
-        log(f"search 실패: {err}")
+    # 시간창마다 조회해 합친다. 열차가 어느 창에서 나왔는지도 같이 들고 있어야
+    # 예약 호출에 같은 시각을 넘길 수 있다.
+    seen: dict[str, tuple[dict, str]] = {}
+    total = 0
+    for window in a.time:
+        search_args = [
+            "search", a.dep, a.arr, a.date, window + "00",
+            "--adults", str(a.adults),
+            "--limit", str(a.limit),
+            "--include-no-seats",
+            "--include-waiting-list",
+        ]
+        result, err = run_helper(search_args)
+        if result is None:
+            log(f"search 실패({window}): {err}")
+            continue
+        total += result.get("count") or 0
+        for t in result["trains"]:
+            seen.setdefault(t["train_no"], (t, window))
+
+    if not seen:
+        log("조회 실패 — 모든 시간창에서 결과 없음")
         return None
 
     # --train-no 로 준 순서가 곧 우선순위다. 둘이 동시에 열리면 앞엣것을 잡는다.
     priority = {no: i for i, no in enumerate(a.train_no)}
-    targets = [t for t in result["trains"] if t["train_no"] in priority]
-    targets.sort(key=lambda t: priority[t["train_no"]])
+    targets = [seen[no] for no in a.train_no if no in seen]
+    missing = [no for no in a.train_no if no not in seen]
+    if missing:
+        log(f"조회 결과에 없는 열차: {' '.join(missing)}")
     if not targets:
-        log(f"대상 열차 {a.train_no} 가 조회 결과에 없음 "
-            f"(전체 {result['count']}편)")
+        log(f"대상 열차 {a.train_no} 가 조회 결과에 없음 (전체 {total}편)")
         return None
 
-    for train in targets:
+    for train, window in targets:
         kinds = openings(train)
         tag = f"{train['train_no']} {train['dep_time'][:2]}:{train['dep_time'][2:4]}"
         if not kinds:
@@ -138,7 +151,7 @@ def check_once(a: argparse.Namespace) -> dict | None:
             return found
 
         reserve_args = [
-            "reserve", a.dep, a.arr, a.date, a.time + "00",
+            "reserve", a.dep, a.arr, a.date, window + "00",
             "--train-id", train["train_id"],
             "--adults", str(a.adults),
             "--seat-option", a.seat_option,
@@ -168,7 +181,10 @@ def main() -> int:
     p.add_argument("date", help="YYYYMMDD")
     p.add_argument("--train-no", nargs="+", required=True,
                    help="감시할 열차번호. 여러 개 지정 가능")
-    p.add_argument("--time", default="0000", help="검색 시작 시각 HHMM")
+    p.add_argument("--time", nargs="+", default=["0000"],
+                   help="검색 시작 시각 HHMM. 여러 개 지정하면 각각 조회해 합친다. "
+                        "코레일 search 는 시작 시각 기준 2시간 남짓만 반환하므로 "
+                        "넓은 시간대는 창을 나눠 줘야 한다")
     p.add_argument("--adults", type=int, default=1)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--seat-option", default="general-first",
@@ -204,6 +220,7 @@ def main() -> int:
 
     mode = "1회 확인" if a.once else f"{a.interval}분 간격"
     log(f"감시: {a.dep}→{a.arr} {a.date} 열차 {' '.join(a.train_no)} "
+        f"(조회창 {' '.join(a.time)}) "
         f"{a.adults}명 {a.seat_option}, {mode}"
         + (", 발견 시 자동예약" if a.reserve else "")
         + (", 예약대기 허용" if a.try_waiting else "")
